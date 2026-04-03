@@ -1,0 +1,89 @@
+Investigate CLI — Eval Results
+Generated: 2026-04-03
+Model: gpt-5.4 (agent) / gpt-4.1 (judge, n=1 with CoT)
+
+════════════════════════════════════════════════════════════════
+  SINGLE-TURN (n=32, dev split)
+════════════════════════════════════════════════════════════════
+
+                              V1          V2          V3
+────────────────────────────────────────────────────────────────
+DIAGNOSIS
+  Hit rate                 24/32 (75%)
+  RCA score (1-5)           2.59
+  Evidence (1-5)            2.91
+  Reasoning (1-5)           3.75
+
+BY DIFFICULTY
+  Easy  hit rate            7/7
+  Medium hit rate          12/15
+  Hard  hit rate            5/10
+
+BY ROOT CAUSE
+  payment                  15/16
+  product-catalog           9/16
+
+BY PERSPECTIVE
+  alert                     5/9
+  end-user                  3/6
+  manager                   7/7
+  sre                       9/10
+
+INVESTIGATION
+  Avg tool calls           20.1
+  Avg signals checked       2.0
+  All 3 signals             9/32
+  Repeated queries          0.0
+  Failed tool calls         0.3
+  Self-corrected            0.2
+  Cache hits                0.0
+
+COST & SPEED
+  Avg tokens              45,255
+  Compacted                 0
+  Avg cost                 $0.0953
+  Avg latency             248.2s
+────────────────────────────────────────────────────────────────
+
+DELTAS:
+  V1→V2:
+  V2→V3:
+
+════════════════════════════════════════════════════════════════
+  MULTI-TURN (n=8, 2-3 turns each)
+════════════════════════════════════════════════════════════════
+
+                              V1          V2          V3
+────────────────────────────────────────────────────────────────
+CONTEXT GROWTH (avg tokens)
+  Turn 1                   8,028
+  Turn 2                  14,064
+  Turn 3                  15,558
+
+AGGREGATE
+  Avg final tokens        14,637
+  Avg final cost          $0.1681
+  Avg tool calls           36.8
+  Cache hits                  0
+  Compacted                   0
+
+DIAGNOSIS (scored turns)
+  Hit rate                 9/17 (53%)
+────────────────────────────────────────────────────────────────
+
+DELTAS:
+  V1→V2:
+  V2→V3:
+
+════════════════════════════════════════════════════════════════
+  KEY FINDINGS
+════════════════════════════════════════════════════════════════
+
+V1 Baseline:
+  - 75% single-turn hit rate, drops to 53% on multi-turn
+  - Struggles with product-catalog (9/16) vs payment (15/16)
+  - Only 28% of scenarios use all 3 signal types
+  - Avg 20 tool calls per investigation, 37 on multi-turn
+  - Context grows linearly across turns (8K → 14K → 16K)
+  - No cache hits, no compaction (expected)
+  - $0.095/scenario single-turn, $0.168/scenario multi-turn
