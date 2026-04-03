@@ -1,3 +1,4 @@
+import argparse
 import os
 import sys
 import json
@@ -12,6 +13,37 @@ import openai
 from config import LOKI_URL, MIMIR_URL, TEMPO_URL, MODEL
 from agent import Agent
 from prompts.system_v1 import SYSTEM_V1
+from prompts.system_v2 import SYSTEM_V2
+
+VERSION_CONFIGS = {
+    "v1": {
+        "system_prompt": SYSTEM_V1,
+        "tools_enabled": True,
+        "context_management_enabled": False,
+        "tool_metadata_headers": False,
+        "error_enrichment": False,
+        "parallel_tool_calls": False,
+        "inject_topology": False,
+    },
+    "v2": {
+        "system_prompt": SYSTEM_V2,
+        "tools_enabled": True,
+        "context_management_enabled": False,
+        "tool_metadata_headers": True,
+        "error_enrichment": True,
+        "parallel_tool_calls": True,
+        "inject_topology": True,
+    },
+    "v3": {
+        "system_prompt": SYSTEM_V2,
+        "tools_enabled": True,
+        "context_management_enabled": True,
+        "tool_metadata_headers": True,
+        "error_enrichment": True,
+        "parallel_tool_calls": True,
+        "inject_topology": True,
+    },
+}
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -83,6 +115,13 @@ def print_demos():
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Investigate CLI", add_help=False)
+    parser.add_argument("--version", choices=["v1", "v2", "v3"], default="v1")
+    args = parser.parse_args()
+
+    version = args.version
+    config = VERSION_CONFIGS[version]
+
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         print("Error: OPENAI_API_KEY not set.")
@@ -104,6 +143,7 @@ def main():
         print("\n  Warning: some backends are unreachable. Queries may fail.")
 
     print(f"  Model: {MODEL}")
+    print(f"  Version: {version.upper()}")
     print()
     print("  Type 'help' for commands, 'demo' for pre-loaded scenarios.")
     print()
@@ -111,11 +151,13 @@ def main():
     client = openai.OpenAI(api_key=api_key)
     agent = Agent(
         client=client,
-        system_prompt=SYSTEM_V1,
-        tools_enabled=True,
-        context_management_enabled=False,
-        tool_metadata_headers=False,
-        error_enrichment=False,
+        system_prompt=config["system_prompt"],
+        tools_enabled=config["tools_enabled"],
+        context_management_enabled=config["context_management_enabled"],
+        tool_metadata_headers=config["tool_metadata_headers"],
+        error_enrichment=config["error_enrichment"],
+        parallel_tool_calls=config["parallel_tool_calls"],
+        inject_topology=config["inject_topology"],
     )
 
     readline.parse_and_bind("tab: complete")
