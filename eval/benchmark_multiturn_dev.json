@@ -1,0 +1,187 @@
+[
+  {
+    "id": "mt-payment-then-broader",
+    "description": "Start with payment failure, then check broader system health",
+    "time_window": {
+      "start": "2026-04-02T22:15:53+00:00",
+      "end": "2026-04-02T22:20:55+00:00"
+    },
+    "turns": [
+      {
+        "symptom": "Checkout is broken. Customers can't complete purchases.",
+        "expected_root_cause": "payment",
+        "difficulty": "easy"
+      },
+      {
+        "symptom": "Are any other services affected by this, or is it isolated to payment?",
+        "expected_root_cause": "payment",
+        "difficulty": "medium"
+      },
+      {
+        "symptom": "Give me a full system health summary — which services are healthy and which are degraded right now?",
+        "expected_root_cause": null,
+        "difficulty": "hard"
+      }
+    ]
+  },
+  {
+    "id": "mt-catalog-then-payment",
+    "description": "Investigate catalog issues, then pivot to payment window",
+    "time_window": {
+      "start": "2026-04-02T22:15:53+00:00",
+      "end": "2026-04-02T22:27:59+00:00"
+    },
+    "turns": [
+      {
+        "symptom": "Product pages are failing to load for some users. Check what's happening with the product catalog.",
+        "expected_root_cause": "product-catalog",
+        "difficulty": "medium"
+      },
+      {
+        "symptom": "We're also getting reports that checkout was broken about 10 minutes ago. Can you check the payment path too?",
+        "expected_root_cause": "payment",
+        "difficulty": "medium"
+      },
+      {
+        "symptom": "Which failure started first, and could they be related?",
+        "expected_root_cause": null,
+        "difficulty": "hard"
+      }
+    ]
+  },
+  {
+    "id": "mt-vague-then-drill",
+    "description": "Start vague, drill down across turns",
+    "time_window": {
+      "start": "2026-04-02T22:30:01+00:00",
+      "end": "2026-04-02T22:42:07+00:00"
+    },
+    "turns": [
+      {
+        "symptom": "Something feels off. Order confirmations are really slow and ads aren't loading right.",
+        "expected_root_cause": "kafka",
+        "difficulty": "hard"
+      },
+      {
+        "symptom": "Focus on the ad service — is it a CPU issue or something else?",
+        "expected_root_cause": "ad",
+        "difficulty": "medium"
+      }
+    ]
+  },
+  {
+    "id": "mt-all-four-triage",
+    "description": "Triage all four failure types across the full dev window",
+    "time_window": {
+      "start": "2026-04-02T22:15:53+00:00",
+      "end": "2026-04-02T22:42:07+00:00"
+    },
+    "turns": [
+      {
+        "symptom": "We had a rough 30 minutes. Multiple things broke. Start with a broad health check.",
+        "expected_root_cause": null,
+        "difficulty": "hard"
+      },
+      {
+        "symptom": "I heard checkout was failing early on. What was the root cause?",
+        "expected_root_cause": "payment",
+        "difficulty": "medium"
+      },
+      {
+        "symptom": "What about the product browsing issues that came after?",
+        "expected_root_cause": "product-catalog",
+        "difficulty": "medium"
+      }
+    ]
+  },
+  {
+    "id": "mt-kafka-deep-dive",
+    "description": "Kafka investigation with progressive refinement",
+    "time_window": {
+      "start": "2026-04-02T22:30:01+00:00",
+      "end": "2026-04-02T22:35:03+00:00"
+    },
+    "turns": [
+      {
+        "symptom": "Emails aren't going out. Order confirmation emails are delayed by several minutes.",
+        "expected_root_cause": "kafka",
+        "difficulty": "medium"
+      },
+      {
+        "symptom": "Is the email service itself the problem, or is something upstream?",
+        "expected_root_cause": "kafka",
+        "difficulty": "medium"
+      },
+      {
+        "symptom": "Check the async processing pipeline — queue depths, consumer lag, anything related to message processing.",
+        "expected_root_cause": "kafka",
+        "difficulty": "easy"
+      }
+    ]
+  },
+  {
+    "id": "mt-ad-then-compare",
+    "description": "Investigate ad service, then compare with healthy baseline",
+    "time_window": {
+      "start": "2026-04-02T22:37:05+00:00",
+      "end": "2026-04-02T22:42:07+00:00"
+    },
+    "turns": [
+      {
+        "symptom": "Pages with ads are loading extremely slowly. The rest of the site seems fine.",
+        "expected_root_cause": "ad",
+        "difficulty": "easy"
+      },
+      {
+        "symptom": "Is this a CPU issue or a dependency issue? What's causing the ad service slowdown?",
+        "expected_root_cause": "ad",
+        "difficulty": "medium"
+      }
+    ]
+  },
+  {
+    "id": "mt-misattribution-correction",
+    "description": "User blames wrong service, agent must correct",
+    "time_window": {
+      "start": "2026-04-02T22:15:53+00:00",
+      "end": "2026-04-02T22:20:55+00:00"
+    },
+    "turns": [
+      {
+        "symptom": "The shipping service is broken. Orders aren't being delivered.",
+        "expected_root_cause": "payment",
+        "difficulty": "hard"
+      },
+      {
+        "symptom": "Are you sure? Our shipping dashboard looks fine. Could it be something else in the checkout flow?",
+        "expected_root_cause": "payment",
+        "difficulty": "medium"
+      }
+    ]
+  },
+  {
+    "id": "mt-postmortem-timeline",
+    "description": "Post-mortem timeline reconstruction across all failures",
+    "time_window": {
+      "start": "2026-04-02T22:15:53+00:00",
+      "end": "2026-04-02T22:42:07+00:00"
+    },
+    "turns": [
+      {
+        "symptom": "We need a post-mortem. Build a timeline of everything that went wrong in the last 30 minutes. Start from the beginning.",
+        "expected_root_cause": null,
+        "difficulty": "hard"
+      },
+      {
+        "symptom": "Now go deeper on the payment failure. What was the exact error and when did it start?",
+        "expected_root_cause": "payment",
+        "difficulty": "easy"
+      },
+      {
+        "symptom": "Were the kafka queue problems related to the payment failure, or independent?",
+        "expected_root_cause": "kafka",
+        "difficulty": "hard"
+      }
+    ]
+  }
+]
