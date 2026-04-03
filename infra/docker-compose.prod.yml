@@ -1,0 +1,34 @@
+# Production LGTM stack for GCP VM deployment.
+# Serves pre-seeded data -- no OTel demo needed.
+#
+# Setup:
+#   1. Import data:  ./import_data.sh ~/lgtm-data.tar.gz
+#   2. Start:        docker compose -f docker-compose.prod.yml up -d
+#   3. Verify:       curl http://localhost:3100/ready
+#
+# The agent queries this stack via LOKI_URL, MIMIR_URL, TEMPO_URL env vars.
+
+services:
+  lgtm:
+    image: grafana/otel-lgtm:0.8.1
+    container_name: lgtm
+    restart: unless-stopped
+    ports:
+      - "3000:3000"   # Grafana UI
+      - "3100:3100"   # Loki HTTP API
+      - "9090:9090"   # Prometheus/Mimir API
+      - "3200:3200"   # Tempo HTTP API
+    volumes:
+      - lgtm-data:/data
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  lgtm-data:
+    external: true
+    name: investigate-cli_lgtm-data

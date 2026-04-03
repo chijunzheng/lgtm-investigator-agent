@@ -1,0 +1,8 @@
+.env
+spec.md
+__pycache__/
+*.pyc
+.venv/
+infra/opentelemetry-demo/
+infra/seed_timestamps.json
+lgtm-data.tar.gz

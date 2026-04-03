@@ -1,0 +1,22 @@
+# OTel Collector extras config for the OTel demo.
+# Routes all telemetry to our external LGTM backend via OTLP/HTTP.
+#
+# IMPORTANT: The spanmetrics connector must stay in the traces pipeline.
+# It bridges traces -> metrics (appears as exporter in traces, receiver in metrics).
+# Removing it from traces breaks the connector contract.
+#
+# On macOS (Docker Desktop), host.docker.internal resolves to the Docker host
+# where LGTM is running with port-forwarded 4318.
+
+exporters:
+  otlphttp/lgtm:
+    endpoint: http://host.docker.internal:4318
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlphttp/lgtm, spanmetrics]
+    metrics:
+      exporters: [otlphttp/lgtm]
+    logs:
+      exporters: [otlphttp/lgtm]

@@ -1,0 +1,29 @@
+# LGTM observability backend (Loki + Grafana + Tempo + Mimir)
+# Used for local dev and as the base for GCP deployment.
+#
+# Receives OTLP from the OTel demo via ports 4317/4318.
+# Agent tools query Loki (3100), Prometheus/Mimir (9090), Tempo (3200).
+
+services:
+  lgtm:
+    image: grafana/otel-lgtm:0.8.1
+    container_name: lgtm
+    ports:
+      - "3001:3000"   # Grafana UI (admin/admin) -- remapped from 3000 to avoid conflicts
+      - "3100:3100"   # Loki HTTP API
+      - "9090:9090"   # Prometheus/Mimir API
+      - "3200:3200"   # Tempo HTTP API
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+    volumes:
+      - lgtm-data:/data
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  lgtm-data:
