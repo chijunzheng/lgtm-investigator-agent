@@ -45,13 +45,18 @@ class ContextManager:
         self._micro_compact()
 
     def _micro_compact(self):
-        """Clear tool results older than N assistant turns."""
-        turns_seen = 0
-        cutoff_idx = len(self._messages)
+        """Clear tool results from previous user turns.
+
+        Counts user messages (conversation turns), not assistant messages
+        (LLM iterations). This preserves context within a single investigation
+        but compacts stale results from earlier conversations.
+        """
+        user_turns_seen = 0
+        cutoff_idx = 0  # default: compact nothing if fewer than N turns
         for i in range(len(self._messages) - 1, -1, -1):
-            if self._messages[i].get("role") == "assistant":
-                turns_seen += 1
-            if turns_seen >= MICRO_COMPACT_KEEP_TURNS:
+            if self._messages[i].get("role") == "user":
+                user_turns_seen += 1
+            if user_turns_seen >= MICRO_COMPACT_KEEP_TURNS:
                 cutoff_idx = i
                 break
 
