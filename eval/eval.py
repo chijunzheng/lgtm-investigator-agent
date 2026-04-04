@@ -42,6 +42,15 @@ VERSION_CONFIGS = {
         "parallel_tool_calls": True,
         "inject_topology": True,
     },
+    "v3": {
+        "system_prompt": SYSTEM_V2,
+        "tools_enabled": True,
+        "context_management": True,
+        "tool_metadata_headers": True,
+        "error_enrichment": True,
+        "parallel_tool_calls": True,
+        "inject_topology": True,
+    },
 }
 
 
@@ -127,6 +136,30 @@ def judge_diagnosis(client, scenario: dict, response: str, n: int = 1) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Hit detection
+# ---------------------------------------------------------------------------
+
+def _check_hit(response: str, expected_root_cause: str) -> bool:
+    """Check if the agent identified the correct root cause in its diagnosis.
+
+    Looks for the expected service name in the diagnosis conclusion,
+    not the full response. Falls back to the last 500 chars if no
+    'Root Cause:' block is found.
+    """
+    lower = response.lower()
+    target = expected_root_cause.lower()
+
+    # Try to extract the diagnosis block
+    if "root cause:" in lower:
+        # Get text after the LAST "Root Cause:" (the final diagnosis)
+        diagnosis = lower.split("root cause:")[-1][:300]
+        return target in diagnosis
+
+    # Fallback: check the last 500 chars (likely the conclusion)
+    return target in lower[-500:]
+
+
+# ---------------------------------------------------------------------------
 # Combined scoring
 # ---------------------------------------------------------------------------
 
@@ -137,7 +170,7 @@ def score_scenario(client, scenario, response, agent_stats, latency):
         "perspective": scenario.get("perspective", "unknown"),
         "expected_root_cause": scenario["expected_root_cause"],
 
-        "hit": scenario["expected_root_cause"].lower() in response.lower(),
+        "hit": _check_hit(response, scenario["expected_root_cause"]),
 
         **judge_diagnosis(client, scenario, response),
 
@@ -200,6 +233,8 @@ def run_eval(version: str, split: str, limit: int = None) -> list:
         print(f"  Judging... ", end="", flush=True)
         result = score_scenario(client, scenario, response, stats, latency)
         result["response_preview"] = response[:500]
+        result["response_full"] = response
+        result["response_tail_3k"] = response[-3000:]
 
         hit_str = "HIT" if result["hit"] else "MISS"
         print(f"{hit_str} | RCA={result['root_cause_accuracy']} "
@@ -361,12 +396,21 @@ def print_multiturn_summary(results: list, version: str):
     print(f"    Total cache hits:    {sum(r['final_cache_hits'] for r in results)}")
     print(f"    Total compacted:     {sum(r['final_micro_compacted'] for r in results)}")
 
-    # Per-turn hit rate (for scored turns only)
+    # Per-turn diagnosis (for scored turns only)
     scored_turns = [t for r in results for t in r["turns"] if t.get("hit") is not None]
     if scored_turns:
         hits = sum(1 for t in scored_turns if t["hit"])
         print(f"\n  DIAGNOSIS (scored turns only)")
-        print(f"    Hit rate: {hits}/{len(scored_turns)}")
+        print(f"    Hit rate:          {hits}/{len(scored_turns)} ({hits/len(scored_turns)*100:.0f}%)")
+        rca_vals = [t["root_cause_accuracy"] for t in scored_turns if "root_cause_accuracy" in t]
+        ev_vals = [t["evidence_quality"] for t in scored_turns if "evidence_quality" in t]
+        re_vals = [t["reasoning_quality"] for t in scored_turns if "reasoning_quality" in t]
+        if rca_vals:
+            print(f"    RCA score (1-5):   {mean(rca_vals):.2f}")
+        if ev_vals:
+            print(f"    Evidence (1-5):    {mean(ev_vals):.2f}")
+        if re_vals:
+            print(f"    Reasoning (1-5):   {mean(re_vals):.2f}")
 
     print(f"{'='*60}\n")
 
