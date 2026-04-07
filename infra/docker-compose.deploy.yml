@@ -1,0 +1,89 @@
+# Full-stack deployment: LGTM + FastAPI backend + Caddy reverse proxy.
+# Everything behind a single port (80) for interviewer access.
+#
+# Architecture:
+#   Caddy (:80) → /grafana/*  → Grafana (:3000)  — browse telemetry + plugin UI
+#                  /ws         → FastAPI (:8000)   — WebSocket for agent chat
+#                  /api/*      → FastAPI (:8000)   — REST endpoints
+#
+# LGTM backends (Loki, Mimir, Tempo) are internal-only — the agent queries
+# them from the FastAPI container, not from the browser.
+#
+# Setup:
+#   1. Import data:  ./import_data.sh ~/lgtm-data.tar.gz
+#   2. Start:        docker compose -f docker-compose.deploy.yml up -d
+#   3. Open:         http://<VM_IP>
+
+services:
+  # --- Observability data backend ---
+  lgtm:
+    image: grafana/otel-lgtm:0.8.1
+    container_name: lgtm
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - lgtm-data:/data
+      - ../grafana-plugin/dist:/data/grafana/plugins/investigate-investigate-app
+    environment:
+      - GF_DEFAULT_APP_MODE=development
+      # Grafana config: allow embedding, anonymous access, unsigned plugin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      # Caddy proxies / directly to Grafana — no sub-path needed
+      - GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=investigate-investigate-app
+    healthcheck:
+      test: ["CMD", "sh", "-c", "test -f /tmp/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # --- Agent backend (FastAPI + WebSocket) ---
+  agent:
+    image: python:3.12-slim
+    container_name: investigate-agent
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    working_dir: /app
+    volumes:
+      - ../src:/app/src:ro
+      - ../infra:/app/infra:ro
+      - ../requirements.txt:/app/requirements.txt:ro
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LOKI_URL=http://lgtm:3100
+      - MIMIR_URL=http://lgtm:9090
+      - TEMPO_URL=http://lgtm:3200
+      - AGENT_VERSION=${AGENT_VERSION:-v4}
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=8000
+    command: >
+      bash -c "
+        pip install -q -r /app/requirements.txt &&
+        cd /app/src &&
+        python3 -m uvicorn web.server:app --host 0.0.0.0 --port 8000
+      "
+    depends_on:
+      lgtm:
+        condition: service_healthy
+
+  # --- Reverse proxy (single entry point on port 80) ---
+  caddy:
+    image: caddy:2-alpine
+    container_name: investigate-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - lgtm
+      - agent
+
+volumes:
+  lgtm-data:
+    external: true
+    name: investigate-cli_lgtm-data

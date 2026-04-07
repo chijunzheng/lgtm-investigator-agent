@@ -1,0 +1,16 @@
+:80 {
+	# Agent WebSocket
+	handle /ws {
+		reverse_proxy agent:8000
+	}
+
+	# Agent REST API
+	handle /api/* {
+		reverse_proxy agent:8000
+	}
+
+	# Everything else goes to Grafana
+	handle {
+		reverse_proxy lgtm:3000
+	}
+}
