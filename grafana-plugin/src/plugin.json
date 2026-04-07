@@ -1,0 +1,33 @@
+{
+  "$schema": "https://raw.githubusercontent.com/grafana/grafana/main/docs/sources/developers/plugins/plugin.schema.json",
+  "type": "app",
+  "name": "Investigate",
+  "id": "investigate-investigate-app",
+  "info": {
+    "keywords": ["app", "investigate", "incident", "ai", "agent"],
+    "description": "AI-powered incident investigation agent",
+    "author": {
+      "name": "Investigate"
+    },
+    "logos": {
+      "small": "img/logo.svg",
+      "large": "img/logo.svg"
+    },
+    "screenshots": [],
+    "version": "%VERSION%",
+    "updated": "%TODAY%"
+  },
+  "includes": [
+    {
+      "type": "page",
+      "name": "Investigate",
+      "path": "/a/%PLUGIN_ID%",
+      "addToNav": true,
+      "defaultNav": true
+    }
+  ],
+  "dependencies": {
+    "grafanaDependency": ">=10.0.0",
+    "plugins": []
+  }
+}

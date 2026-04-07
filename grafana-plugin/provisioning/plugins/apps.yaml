@@ -1,0 +1,11 @@
+apiVersion: 1
+
+apps:
+  - type: 'investigate-investigate-app'
+    org_id: 1
+    org_name: 'investigate'
+    disabled: false
+    jsonData:
+      apiUrl: http://default-url.com
+    secureJsonData:
+      apiKey: secret-key
