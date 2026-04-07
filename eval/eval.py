@@ -1,5 +1,26 @@
 #!/usr/bin/env python3
-"""Eval framework: run scenarios, score, compare versions."""
+"""Evaluation framework for benchmarking the investigate agent.
+
+Runs curated incident scenarios against the agent, then scores the results
+using three complementary methods:
+
+1. **Hit detection** (_check_hit):  Binary — did the agent name the correct
+   root cause service? Simple keyword match in the diagnosis block.
+
+2. **LLM judge** (judge_diagnosis): Nuanced 1-5 ratings on three dimensions:
+   root_cause_accuracy, evidence_quality, reasoning_quality.
+   Uses chain-of-thought prompting for consistent scoring.
+
+3. **Trace scoring** (score_path_from_trace): Objective metrics extracted
+   directly from the execution trace: tool call count, signal coverage,
+   self-corrections, cache hits, etc.
+
+Usage:
+  python3 eval/eval.py --version v2 --split dev          # Run V2 on dev split
+  python3 eval/eval.py --version v3 --split multiturn    # Multi-turn eval
+  python3 eval/eval.py --compare --split dev              # Compare all versions
+  python3 eval/eval.py --version v2 --summary             # Print saved results
+"""
 
 import argparse
 import json
@@ -50,16 +71,37 @@ VERSION_CONFIGS = {
         "error_enrichment": True,
         "parallel_tool_calls": True,
         "inject_topology": True,
+        "model_routing": False,
+    },
+    "v4": {
+        "system_prompt": SYSTEM_V2,
+        "tools_enabled": True,
+        "context_management": True,
+        "tool_metadata_headers": True,
+        "error_enrichment": True,
+        "parallel_tool_calls": True,
+        "inject_topology": True,
+        "model_routing": True,
     },
 }
 
 
 # ---------------------------------------------------------------------------
-# Trace scoring
+# Trace scoring — objective metrics from the execution trace
 # ---------------------------------------------------------------------------
 
 def score_path_from_trace(trace: list) -> dict:
-    """Score investigation quality directly from the tool call trace."""
+    """Score investigation quality directly from the tool call trace.
+
+    These metrics are objective (no LLM judgment needed):
+      - total_tool_calls:       How many tools the agent called
+      - signals_checked:        How many of {logs, metrics, traces} were queried
+      - used_all_3_signals:     Whether the agent checked all three signal types
+      - repeated_queries:       Wasted calls (same tool + same args)
+      - cache_hits:             Queries served from the dedup cache (V3/V4)
+      - self_corrected_queries: Times the agent retried a failed tool call and succeeded
+      - failed_tool_calls:      Total tool errors (bad queries, connection failures)
+    """
     tool_calls = [t for t in trace if t["type"] == "tool_call"]
     tools_used = [t["tool"] for t in tool_calls]
 
@@ -92,11 +134,19 @@ def score_path_from_trace(trace: list) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# LLM Judge
+# LLM Judge — uses a separate LLM to rate diagnosis quality
 # ---------------------------------------------------------------------------
 
 def judge_diagnosis(client, scenario: dict, response: str, n: int = 1) -> dict:
-    """Run LLM judge n times, return median scores."""
+    """Run LLM judge n times, return median scores.
+
+    The judge receives the scenario context (symptom, expected root cause) and
+    the agent's full response, then rates quality on three 1-5 dimensions.
+    Uses JSON response format for reliable parsing.
+
+    Running n>1 times and taking the median reduces judge variance, but costs
+    more. Default n=1 is used in practice (judge consistency is high enough).
+    """
     scores = []
     for attempt in range(n):
         for retry in range(5):
@@ -136,7 +186,7 @@ def judge_diagnosis(client, scenario: dict, response: str, n: int = 1) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Hit detection
+# Hit detection — binary pass/fail on root cause identification
 # ---------------------------------------------------------------------------
 
 def _check_hit(response: str, expected_root_cause: str) -> bool:
@@ -160,10 +210,11 @@ def _check_hit(response: str, expected_root_cause: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Combined scoring
+# Combined scoring — merges all three scoring methods into one result dict
 # ---------------------------------------------------------------------------
 
 def score_scenario(client, scenario, response, agent_stats, latency):
+    """Combine hit detection + LLM judge + trace scoring into a single result."""
     return {
         "scenario_id": scenario["id"],
         "difficulty": scenario["difficulty"],
@@ -182,11 +233,16 @@ def score_scenario(client, scenario, response, agent_stats, latency):
 
 
 # ---------------------------------------------------------------------------
-# Run eval
+# Single-turn eval — one symptom per scenario, agent investigates once
 # ---------------------------------------------------------------------------
 
 def run_eval(version: str, split: str, limit: int = None) -> list:
-    """Run all scenarios for a version+split. Returns list of scored results."""
+    """Run all scenarios for a version+split. Returns list of scored results.
+
+    For each scenario: create a fresh agent → run investigation → judge result.
+    Results are saved incrementally (after each scenario) so partial runs
+    are preserved if the process crashes or is interrupted.
+    """
     config = VERSION_CONFIGS[version]
     benchmark_path = EVAL_DIR / f"benchmark_{split}.json"
 
@@ -218,6 +274,7 @@ def run_eval(version: str, split: str, limit: int = None) -> list:
             error_enrichment=config["error_enrichment"],
             parallel_tool_calls=config.get("parallel_tool_calls", False),
             inject_topology=config.get("inject_topology", False),
+            model_routing=config.get("model_routing", False),
         )
 
         t0 = time.time()
@@ -257,11 +314,16 @@ def run_eval(version: str, split: str, limit: int = None) -> list:
 
 
 # ---------------------------------------------------------------------------
-# Multi-turn eval
+# Multi-turn eval — agent keeps context across follow-up questions
 # ---------------------------------------------------------------------------
 
 def run_multiturn_eval(version: str, limit: int = None) -> list:
-    """Run multi-turn scenarios. Agent is NOT reset between turns."""
+    """Run multi-turn scenarios. Agent is NOT reset between turns.
+
+    This tests context management: can the agent handle follow-up questions
+    without getting confused by accumulating tool results? V3's micro-compact
+    is designed specifically to handle this scenario.
+    """
     config = VERSION_CONFIGS[version]
     benchmark_path = EVAL_DIR / "benchmark_multiturn_dev.json"
 
@@ -293,6 +355,7 @@ def run_multiturn_eval(version: str, limit: int = None) -> list:
             error_enrichment=config["error_enrichment"],
             parallel_tool_calls=config.get("parallel_tool_calls", False),
             inject_topology=config.get("inject_topology", False),
+            model_routing=config.get("model_routing", False),
         )
 
         turn_results = []
@@ -338,11 +401,16 @@ def run_multiturn_eval(version: str, limit: int = None) -> list:
                       f"ctx: {stats['context_tokens']:,} tok")
 
             scored["turn"] = turn_idx + 1
+            scored["symptom"] = turn["symptom"]
+            scored["response_full"] = response
+            scored["response_tail_3k"] = response[-3000:]
             scored["context_tokens_at_turn"] = stats["context_tokens"]
             scored["total_tool_calls_cumulative"] = stats["total_tool_calls"]
             scored["total_cost_cumulative"] = stats["cost"]["estimated_cost"]
+            scored["cost_at_turn"] = stats["cost"]
             scored["cache_hits_cumulative"] = stats["cache_hits"]
             scored["micro_compacted_cumulative"] = stats["micro_compacted"]
+            scored["trace"] = stats["trace"]
             turn_results.append(scored)
 
             time.sleep(15)  # rate limit buffer between turns
@@ -556,8 +624,8 @@ def compare_versions(split: str = "dev"):
 
 def main():
     parser = argparse.ArgumentParser(description="Investigate CLI Eval")
-    parser.add_argument("--version", choices=["v1", "v2", "v3"], help="Version to eval")
-    parser.add_argument("--split", choices=["dev", "holdout", "multiturn"], default="dev", help="Benchmark split")
+    parser.add_argument("--version", choices=["v1", "v2", "v3", "v4"], help="Version to eval")
+    parser.add_argument("--split", choices=["dev", "holdout", "multiturn", "balanced"], default="balanced", help="Benchmark split")
     parser.add_argument("--limit", type=int, help="Limit number of scenarios (for testing)")
     parser.add_argument("--judge-model", type=str, help="Override judge model (e.g., gpt-4.1)")
     parser.add_argument("--compare", action="store_true", help="Compare saved results")

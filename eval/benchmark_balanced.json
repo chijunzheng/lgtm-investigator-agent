@@ -1,0 +1,386 @@
+[
+  {
+    "id": "payment-direct-invalid-token",
+    "symptom": "Checkout attempts are failing, and the payment service may be rejecting charges. Please investigate the payment path.",
+    "expected_root_cause": "payment",
+    "expected_signal": "payment service error logs during 2026-04-02T22:15:53 to 22:20:55: 'Payment request failed. Invalid token. app.loyalty.level=gold' (6 occurrences)",
+    "difficulty": "easy",
+    "perspective": "sre",
+    "time_window": {
+      "start": "2026-04-02T22:15:53.229909+00:00",
+      "end": "2026-04-02T22:20:55.269033+00:00"
+    }
+  },
+  {
+    "id": "manager-checkout-revenue-impact",
+    "symptom": "We may be unable to complete purchases right now. Customers can browse, but orders are not going through during checkout. Find the cause quickly.",
+    "expected_root_cause": "payment",
+    "expected_signal": "Error traces from load-generator on checkout flows only: ops {'user_checkout_single', 'user_checkout_multi'} with sample trace reaching checkout PlaceOrder before failure, plus payment error logs showing 'Payment request failed. Invalid token.'",
+    "difficulty": "medium",
+    "perspective": "manager",
+    "time_window": {
+      "start": "2026-04-02T22:15:53.229909+00:00",
+      "end": "2026-04-02T22:20:55.269033+00:00"
+    }
+  },
+  {
+    "id": "end-user-cant-place-order",
+    "symptom": "Users report that they can add items to cart but get blocked when trying to place an order.",
+    "expected_root_cause": "payment",
+    "expected_signal": "load-generator shows 6 error traces for checkout operations ('user_checkout_single', 'user_checkout_multi'), while payment logs contain charge failures: 'Payment request failed. Invalid token.'",
+    "difficulty": "medium",
+    "perspective": "end-user",
+    "time_window": {
+      "start": "2026-04-02T22:15:53.229909+00:00",
+      "end": "2026-04-02T22:20:55.269033+00:00"
+    }
+  },
+  {
+    "id": "alert-checkout-flow-errors",
+    "symptom": "Automated synthetic checks for the checkout journey are failing in the latest window.",
+    "expected_root_cause": "payment",
+    "expected_signal": "Tempo contains 6 error traces from load-generator for checkout scenarios with avg_duration 32ms, and the backing service with explicit errors is payment: 'Payment request failed. Invalid token.'",
+    "difficulty": "medium",
+    "perspective": "alert",
+    "time_window": {
+      "start": "2026-04-02T22:15:53.229909+00:00",
+      "end": "2026-04-02T22:20:55.269033+00:00"
+    }
+  },
+  {
+    "id": "sre-payment-service-suspected",
+    "symptom": "Something is wrong specifically in the payment path. Charge processing appears broken.",
+    "expected_root_cause": "payment",
+    "expected_signal": "Direct evidence in payment logs: 'Payment request failed. Invalid token. app.loyalty.level=gold' repeated during the incident window",
+    "difficulty": "easy",
+    "perspective": "sre",
+    "time_window": {
+      "start": "2026-04-02T22:15:53.229909+00:00",
+      "end": "2026-04-02T22:20:55.269033+00:00"
+    }
+  },
+  {
+    "id": "hard-checkout-no-obvious-latency",
+    "symptom": "Customers say checkout fails immediately rather than hanging. There is no obvious platform-wide slowdown, but orders are not completing.",
+    "expected_root_cause": "payment",
+    "expected_signal": "Checkout-related error traces are short (avg 32ms), indicating fast failure, and payment logs show the concrete cause: invalid token causing payment request failure",
+    "difficulty": "hard",
+    "perspective": "end-user",
+    "time_window": {
+      "start": "2026-04-02T22:15:53.229909+00:00",
+      "end": "2026-04-02T22:20:55.269033+00:00"
+    }
+  },
+  {
+    "id": "manager-purchases-down-browsing-ok",
+    "symptom": "Browsing still seems available, but purchase completion is impacted. Please identify which backend dependency is breaking order placement.",
+    "expected_root_cause": "payment",
+    "expected_signal": "Most visible failures are in checkout synthetic traces, while other available metrics do not show broad platform distress; payment is the service with explicit charge errors in logs",
+    "difficulty": "medium",
+    "perspective": "manager",
+    "time_window": {
+      "start": "2026-04-02T22:15:53.229909+00:00",
+      "end": "2026-04-02T22:20:55.269033+00:00"
+    }
+  },
+  {
+    "id": "alert-place-order-failing",
+    "symptom": "Place-order requests are failing somewhere in the checkout stack.",
+    "expected_root_cause": "payment",
+    "expected_signal": "Sample error trace spans show frontend calling oteldemo.CheckoutService/PlaceOrder successfully up to checkout preparation, while payment logs during the same window report 'Payment request failed. Invalid token.'",
+    "difficulty": "medium",
+    "perspective": "alert",
+    "time_window": {
+      "start": "2026-04-02T22:15:53.229909+00:00",
+      "end": "2026-04-02T22:20:55.269033+00:00"
+    }
+  },
+  {
+    "id": "pcf-01",
+    "symptom": "A customer reports that one product detail page fails to load, but browsing the rest of the storefront seems normal.",
+    "expected_root_cause": "product-catalog",
+    "expected_signal": "Tempo shows error traces for frontend GET requests to /api/products/{productId}, and the trace path ends in product-catalog via oteldemo.ProductCatalogService/GetProduct for the failing product request.",
+    "difficulty": "hard",
+    "perspective": "end-user",
+    "time_window": {
+      "start": "2026-04-02T22:22:57.287840+00:00",
+      "end": "2026-04-02T22:27:59.314876+00:00"
+    }
+  },
+  {
+    "id": "pcf-02",
+    "symptom": "We are seeing errors in product page requests from the frontend-web service. Can you determine which backend dependency is causing them?",
+    "expected_root_cause": "product-catalog",
+    "expected_signal": "Tempo contains 27 error traces on frontend-web GET requests during the window, and sample spans show the failing request calling frontend -> ProductCatalogService/GetProduct -> product-catalog.",
+    "difficulty": "medium",
+    "perspective": "sre",
+    "time_window": {
+      "start": "2026-04-02T22:22:57.287840+00:00",
+      "end": "2026-04-02T22:27:59.314876+00:00"
+    }
+  },
+  {
+    "id": "pcf-03",
+    "symptom": "Alert: frontend product-detail GET requests are erroring during the 22:22-22:28 window.",
+    "expected_root_cause": "product-catalog",
+    "expected_signal": "The strongest signal is the set of frontend-web GET error traces whose downstream span is product-catalog: oteldemo.ProductCatalogService/GetProduct.",
+    "difficulty": "medium",
+    "perspective": "alert",
+    "time_window": {
+      "start": "2026-04-02T22:22:57.287840+00:00",
+      "end": "2026-04-02T22:27:59.314876+00:00"
+    }
+  },
+  {
+    "id": "pcf-04",
+    "symptom": "Product browsing is flaky for some items, but there is no broad site-wide outage. Please identify the failing microservice.",
+    "expected_root_cause": "product-catalog",
+    "expected_signal": "Only requests for product details show trace failures, and those traces consistently terminate at product-catalog GetProduct rather than other services; product-catalog log volume is also elevated to 44 vs 20 in baseline.",
+    "difficulty": "hard",
+    "perspective": "manager",
+    "time_window": {
+      "start": "2026-04-02T22:22:57.287840+00:00",
+      "end": "2026-04-02T22:27:59.314876+00:00"
+    }
+  },
+  {
+    "id": "pcf-05",
+    "symptom": "The synthetic user_browse_product journey is failing intermittently even though most services look quiet. Investigate the source.",
+    "expected_root_cause": "product-catalog",
+    "expected_signal": "Tempo shows an error trace rooted at load-generator:user_browse_product, with downstream spans flowing through frontend and into product-catalog GetProduct for the failing browse action.",
+    "difficulty": "medium",
+    "perspective": "alert",
+    "time_window": {
+      "start": "2026-04-02T22:22:57.287840+00:00",
+      "end": "2026-04-02T22:27:59.314876+00:00"
+    }
+  },
+  {
+    "id": "pcf-06",
+    "symptom": "An engineer says the issue seems related to ProductCatalogService/GetProduct calls. Confirm the real cause.",
+    "expected_root_cause": "product-catalog",
+    "expected_signal": "Trace spans explicitly show frontend invoking oteldemo.ProductCatalogService/GetProduct and the request reaching product-catalog on failing product-page requests.",
+    "difficulty": "easy",
+    "perspective": "sre",
+    "time_window": {
+      "start": "2026-04-02T22:22:57.287840+00:00",
+      "end": "2026-04-02T22:27:59.314876+00:00"
+    }
+  },
+  {
+    "id": "pcf-07",
+    "symptom": "We are getting complaints that clicking certain product links returns an error page, while homepage and general browsing still work.",
+    "expected_root_cause": "product-catalog",
+    "expected_signal": "Tempo error traces are concentrated on GET requests for /api/products/{productId}; the failing dependency in those traces is product-catalog GetProduct, indicating item-specific catalog lookup failure.",
+    "difficulty": "hard",
+    "perspective": "end-user",
+    "time_window": {
+      "start": "2026-04-02T22:22:57.287840+00:00",
+      "end": "2026-04-02T22:27:59.314876+00:00"
+    }
+  },
+  {
+    "id": "pcf-08",
+    "symptom": "Dashboard observation: frontend-proxy log volume is much higher than normal during the incident window, and users report item-page issues. Find the backend root cause.",
+    "expected_root_cause": "product-catalog",
+    "expected_signal": "Although frontend-proxy logs spike to 118, the proving signal is distributed traces showing frontend product-detail requests failing when calling product-catalog GetProduct; product-catalog logs are also elevated to 44 from a 20 baseline.",
+    "difficulty": "medium",
+    "perspective": "sre",
+    "time_window": {
+      "start": "2026-04-02T22:22:57.287840+00:00",
+      "end": "2026-04-02T22:27:59.314876+00:00"
+    }
+  },
+  {
+    "id": "kafka-queue-01",
+    "symptom": "Alert: Kafka consumer lag is elevated for the fraud-detection pipeline during the current incident window. Please investigate whether message processing is backed up.",
+    "expected_root_cause": "kafka",
+    "expected_signal": "Prometheus shows kafka_consumer_lag for fraud-detection at about 493.9697 during 2026-04-02T22:30:01 to 22:35:03, indicating a backed-up Kafka consumer.",
+    "difficulty": "easy",
+    "perspective": "alert",
+    "time_window": {
+      "start": "2026-04-02T22:30:01.347521+00:00",
+      "end": "2026-04-02T22:35:03.402054+00:00"
+    }
+  },
+  {
+    "id": "kafka-queue-02",
+    "symptom": "SRE report: accounting is suddenly emitting many \"Order parsing failed\" errors and order processing looks unhealthy. Find the underlying platform issue.",
+    "expected_root_cause": "kafka",
+    "expected_signal": "Loki shows 78 accounting error logs with message \"Order parsing failed\" in the failure window, and the queue-side indicator is elevated Kafka consumer lag on fraud-detection (~493.9697), pointing to Kafka backlog rather than an isolated accounting bug.",
+    "difficulty": "medium",
+    "perspective": "sre",
+    "time_window": {
+      "start": "2026-04-02T22:30:01.347521+00:00",
+      "end": "2026-04-02T22:35:03.402054+00:00"
+    }
+  },
+  {
+    "id": "kafka-queue-03",
+    "symptom": "Manager escalation: checkout-related processing seems stuck in the backend even though the site is still responding. We need to know what shared dependency is slowing downstream consumers.",
+    "expected_root_cause": "kafka",
+    "expected_signal": "The strongest shared-failure signal is Prometheus kafka_consumer_lag on fraud-detection (~493.9697) together with a burst of downstream accounting errors (78 \"Order parsing failed\" logs), which is consistent with Kafka queue overload causing lag.",
+    "difficulty": "hard",
+    "perspective": "manager",
+    "time_window": {
+      "start": "2026-04-02T22:30:01.347521+00:00",
+      "end": "2026-04-02T22:35:03.402054+00:00"
+    }
+  },
+  {
+    "id": "kafka-queue-04",
+    "symptom": "End-user complaint: orders appear to go through on the website, but follow-up backend processing seems delayed or inconsistent. Please investigate the order pipeline.",
+    "expected_root_cause": "kafka",
+    "expected_signal": "Frontend components still have activity, but accounting logs are dominated by 78 \"Order parsing failed\" errors while Kafka consumer lag remains high (~493.9697 for fraud-detection), indicating a queue-processing issue in Kafka.",
+    "difficulty": "hard",
+    "perspective": "end-user",
+    "time_window": {
+      "start": "2026-04-02T22:30:01.347521+00:00",
+      "end": "2026-04-02T22:35:03.402054+00:00"
+    }
+  },
+  {
+    "id": "kafka-queue-05",
+    "symptom": "Alert: abnormal spike in accounting errors during order consumption. Determine whether the problem is local to accounting or upstream in messaging.",
+    "expected_root_cause": "kafka",
+    "expected_signal": "Accounting has 78 error logs saying \"Order parsing failed\" during the window, and the corroborating infrastructure signal is elevated kafka_consumer_lag (~493.9697), implicating Kafka backlog as the upstream cause.",
+    "difficulty": "easy",
+    "perspective": "alert",
+    "time_window": {
+      "start": "2026-04-02T22:30:01.347521+00:00",
+      "end": "2026-04-02T22:35:03.402054+00:00"
+    }
+  },
+  {
+    "id": "kafka-queue-06",
+    "symptom": "SRE dashboard note: frontend-proxy log volume has jumped noticeably, but there are no useful error traces. Investigate whether requests are piling up behind asynchronous processing.",
+    "expected_root_cause": "kafka",
+    "expected_signal": "Loki shows frontend-proxy logs increased to 125 from a healthy baseline of 54, while traces do not show a clear service exception path; the concrete backend signal is elevated Kafka consumer lag (~493.9697), pointing to queue overload.",
+    "difficulty": "medium",
+    "perspective": "sre",
+    "time_window": {
+      "start": "2026-04-02T22:30:01.347521+00:00",
+      "end": "2026-04-02T22:35:03.402054+00:00"
+    }
+  },
+  {
+    "id": "kafka-queue-07",
+    "symptom": "Manager escalation: multiple teams report odd order-handling behavior, but nobody sees a clear HTTP failure. Check for an internal platform bottleneck affecting consumers.",
+    "expected_root_cause": "kafka",
+    "expected_signal": "There are no decisive error traces, but accounting emits 78 \"Order parsing failed\" logs and Prometheus shows sustained Kafka consumer lag (~493.9697 on fraud-detection), which identifies Kafka as the shared bottleneck.",
+    "difficulty": "hard",
+    "perspective": "manager",
+    "time_window": {
+      "start": "2026-04-02T22:30:01.347521+00:00",
+      "end": "2026-04-02T22:35:03.402054+00:00"
+    }
+  },
+  {
+    "id": "kafka-queue-08",
+    "symptom": "End-user report: the storefront loads, but order-related actions feel unreliable behind the scenes. There are no obvious page crashes. Find the backend cause.",
+    "expected_root_cause": "kafka",
+    "expected_signal": "Frontend services still show activity, yet accounting records 78 \"Order parsing failed\" errors and Kafka consumer lag is elevated (~493.9697), indicating the issue is in Kafka-backed asynchronous processing rather than page serving.",
+    "difficulty": "hard",
+    "perspective": "end-user",
+    "time_window": {
+      "start": "2026-04-02T22:30:01.347521+00:00",
+      "end": "2026-04-02T22:35:03.402054+00:00"
+    }
+  },
+  {
+    "id": "ad-cpu-01",
+    "symptom": "Alert: CPU usage for the ad service spiked sharply during 2026-04-02 22:37-22:42. Please confirm whether ad is the source of the current frontend instability.",
+    "expected_root_cause": "ad",
+    "expected_signal": "The decisive signal is a CPU saturation spike in the ad service during the failure window, matching the enabled adHighCpu fault.",
+    "difficulty": "easy",
+    "perspective": "alert",
+    "time_window": {
+      "start": "2026-04-02T22:37:05.422409+00:00",
+      "end": "2026-04-02T22:42:07.481147+00:00"
+    }
+  },
+  {
+    "id": "ad-cpu-02",
+    "symptom": "SRE report: the ad service looks unhealthy after a fault injection change. Frontend traffic is showing some GET errors, but there are no useful error traces. Investigate the likely cause.",
+    "expected_root_cause": "ad",
+    "expected_signal": "Ad service CPU is abnormally high in the same window; frontend-proxy and frontend-web only show a small number of error traces, making ad CPU the primary causal signal.",
+    "difficulty": "easy",
+    "perspective": "sre",
+    "time_window": {
+      "start": "2026-04-02T22:37:05.422409+00:00",
+      "end": "2026-04-02T22:42:07.481147+00:00"
+    }
+  },
+  {
+    "id": "ad-cpu-03",
+    "symptom": "Manager escalation: we deliberately enabled an experiment and now suspect the advertising path is degrading the site. Can you verify if the ad service is causing this incident?",
+    "expected_root_cause": "ad",
+    "expected_signal": "The proving signal is elevated CPU on ad immediately after the adHighCpu flag was toggled, with no stronger competing error signal in logs, metrics, or traces.",
+    "difficulty": "easy",
+    "perspective": "manager",
+    "time_window": {
+      "start": "2026-04-02T22:37:05.422409+00:00",
+      "end": "2026-04-02T22:42:07.481147+00:00"
+    }
+  },
+  {
+    "id": "ad-cpu-04",
+    "symptom": "Alert from service dashboard: ad is the only service suspected by the active incident flag, while frontend-proxy and frontend-web are seeing a handful of GET-related errors. Determine the root cause.",
+    "expected_root_cause": "ad",
+    "expected_signal": "CPU usage on ad spikes during 22:37:05-22:42:07; the observed frontend errors are secondary and there are no error traces pointing to another backend service.",
+    "difficulty": "easy",
+    "perspective": "alert",
+    "time_window": {
+      "start": "2026-04-02T22:37:05.422409+00:00",
+      "end": "2026-04-02T22:42:07.481147+00:00"
+    }
+  },
+  {
+    "id": "ad-cpu-05",
+    "symptom": "End users report that parts of the storefront feel flaky and some page loads are not completing cleanly, but checkout is not obviously broken. Please investigate.",
+    "expected_root_cause": "ad",
+    "expected_signal": "Frontend-proxy and frontend-web show some GET error traces during the window, and the underlying cause is a CPU spike in ad consistent with the adHighCpu fault.",
+    "difficulty": "medium",
+    "perspective": "end-user",
+    "time_window": {
+      "start": "2026-04-02T22:37:05.422409+00:00",
+      "end": "2026-04-02T22:42:07.481147+00:00"
+    }
+  },
+  {
+    "id": "ad-cpu-06",
+    "symptom": "SRE handoff: we are seeing elevated frontend-proxy log volume compared with normal, plus a few frontend GET/click errors, but no clear backend error trace. Find the most likely source.",
+    "expected_root_cause": "ad",
+    "expected_signal": "Frontend-proxy log volume rose to 119 from a 54-log baseline and frontend-web/proxy show limited error traces, while the primary root-cause signal is high CPU on ad during the same interval.",
+    "difficulty": "medium",
+    "perspective": "sre",
+    "time_window": {
+      "start": "2026-04-02T22:37:05.422409+00:00",
+      "end": "2026-04-02T22:42:07.481147+00:00"
+    }
+  },
+  {
+    "id": "ad-cpu-07",
+    "symptom": "Monitoring dashboard observation: several frontend components look noisier than usual, especially the proxy, yet standard metrics do not show a strong issue in shipping or fraud-detection. Investigate what is actually failing.",
+    "expected_root_cause": "ad",
+    "expected_signal": "Shipping request rate and p99 latency do not indicate the main problem, and fraud-detection lag is near baseline; the differentiating signal is CPU exhaustion in ad during the incident window.",
+    "difficulty": "medium",
+    "perspective": "alert",
+    "time_window": {
+      "start": "2026-04-02T22:37:05.422409+00:00",
+      "end": "2026-04-02T22:42:07.481147+00:00"
+    }
+  },
+  {
+    "id": "ad-cpu-08",
+    "symptom": "Manager update request: customer-facing pages seem intermittently unstable, but the usual suspects like checkout, shipping, and fraud pipelines do not look dramatically worse. What service should we focus on?",
+    "expected_root_cause": "ad",
+    "expected_signal": "Observed metrics do not show a meaningful anomaly in shipping or fraud-detection, while ad experiences the key resource anomaly: high CPU coincident with the incident.",
+    "difficulty": "medium",
+    "perspective": "manager",
+    "time_window": {
+      "start": "2026-04-02T22:37:05.422409+00:00",
+      "end": "2026-04-02T22:42:07.481147+00:00"
+    }
+  }
+]

@@ -17,8 +17,12 @@ services:
       - "4318:4318"   # OTLP HTTP receiver
     volumes:
       - lgtm-data:/data
+      - ../grafana-plugin/dist:/data/grafana/plugins/investigate-investigate-app
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=investigate-investigate-app
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
       interval: 10s

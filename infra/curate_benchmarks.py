@@ -1,8 +1,21 @@
-"""Curate benchmark scenarios from actual LGTM data using an LLM.
+"""Step 2 of the data pipeline: generate diverse benchmark scenarios from real data.
 
-Queries Loki, Tempo, and Prometheus for each failure window,
-then feeds the real signal data to an LLM to generate diverse
-benchmark scenarios grounded in what the data actually shows.
+Pipeline: seed_failures.py → curate_benchmarks.py
+
+This script:
+  1. Reads the time windows from seed_timestamps.json (created by seed_failures.py)
+  2. For each failure window, queries Loki/Mimir/Tempo for actual signal data
+  3. Feeds the real data + a baseline (healthy period) to an LLM
+  4. The LLM generates N diverse scenarios per failure, varying:
+     - Perspective (end-user, SRE, alert, manager)
+     - Difficulty (easy=names the service, hard=vague symptom)
+     - Entry point (different places in the failure cascade)
+  5. Outputs eval/benchmark_dev.json and eval/benchmark_holdout.json
+
+Why LLM curation instead of templates?
+  - Scenarios are grounded in real data (only describes what signals actually show)
+  - Diversity prevents overfitting to one phrasing style
+  - Easy to generate more scenarios by increasing --scenarios-per-failure
 
 Usage:
   python3 infra/curate_benchmarks.py                          # reads .env
@@ -36,7 +49,9 @@ PROM_URL = "http://localhost:9090"
 
 
 # ---------------------------------------------------------------------------
-# Data extraction: pull real signals from LGTM for a time window
+# Data extraction: pull real signals from LGTM for a failure time window.
+# Each function queries one backend and returns structured data that gets
+# fed into the LLM curation prompt as context.
 # ---------------------------------------------------------------------------
 
 def query_loki_errors(start: str, end: str, limit: int = 100) -> list[dict]:
@@ -215,7 +230,12 @@ def query_prometheus_signals(mid_epoch: int) -> dict:
 
 
 def extract_failure_data(record: dict) -> dict:
-    """Extract all available signal data for a single failure window."""
+    """Extract all available signal data for a single failure window.
+
+    Queries all three backends (Loki, Tempo, Prometheus) to build a complete
+    picture of what the failure looks like in telemetry. This data is what
+    the LLM sees when generating benchmark scenarios.
+    """
     start = record["start"]
     end = record["end"]
     s_epoch = int(datetime.fromisoformat(start).timestamp())
@@ -240,7 +260,11 @@ def extract_failure_data(record: dict) -> dict:
 
 
 def extract_baseline_data() -> dict:
-    """Extract signal data from a healthy window (before any failures)."""
+    """Extract signal data from a healthy window (5 min before first failure).
+
+    The baseline gives the LLM a comparison point so it can describe symptoms
+    as deviations from normal behavior (e.g., "error rate spiked from 0.1% to 15%").
+    """
     with open(Path(__file__).parent / "seed_timestamps.json") as f:
         data = json.load(f)
 
@@ -263,7 +287,9 @@ def extract_baseline_data() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# LLM curation: generate benchmark scenarios from signal data
+# LLM curation: feed real signal data to an LLM to generate diverse scenarios.
+# The prompt asks the LLM to vary perspective, difficulty, and cascade entry
+# point, grounded in what the actual telemetry data shows.
 # ---------------------------------------------------------------------------
 
 CURATION_PROMPT = """You are generating benchmark scenarios for an incident investigation CLI agent.
@@ -431,10 +457,10 @@ def curate_scenarios(
 
     parsed = json.loads(content)
 
-    # Handle various response shapes:
-    #   [...] — bare array
-    #   {"scenarios": [...]} — wrapped array
-    #   {"id": ..., "symptom": ...} — single scenario object (gpt-5.4 does this)
+    # Handle various LLM response shapes (different models format JSON differently):
+    #   [...] — bare array (most common)
+    #   {"scenarios": [...]} — wrapped array (requested format)
+    #   {"id": ..., "symptom": ...} — single scenario object (gpt-5.4 does this sometimes)
     if isinstance(parsed, list):
         scenarios = parsed
     elif isinstance(parsed, dict):

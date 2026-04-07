@@ -1,3 +1,13 @@
+# Chain-of-thought judge prompt: forces the LLM to analyze the diagnosis in
+# structured steps (Step 1: analysis, Step 2: scoring) before assigning scores.
+# This improves scoring consistency vs. directly asking for numbers.
+#
+# The 1-5 rubrics are calibrated so that:
+#   5 = production-quality diagnosis
+#   3 = correct service but weak evidence
+#   1 = completely wrong or no diagnosis
+#
+# Response format is JSON for reliable automated parsing.
 DIAGNOSIS_JUDGE_PROMPT = """You are evaluating an incident investigation agent's diagnosis.
 
 ## Scenario

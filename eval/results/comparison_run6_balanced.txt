@@ -1,0 +1,215 @@
+Investigate CLI — Eval Results (Run 6 — Balanced)
+Generated: 2026-04-07
+Benchmark: balanced (8 scenarios per failure type, 32 total)
+  All 4 failure types: payment, product-catalog, kafka, ad
+
+Model: gpt-5.4 (agent) / gpt-4.1 (judge, n=1 with CoT)
+V4 sweep model: gpt-4.1 (first LLM call ever only)
+Hit metric: strict (checks diagnosis block only)
+
+════════════════════════════════════════════════════════════════
+  SINGLE-TURN (n=32, balanced: 8 per failure type)
+════════════════════════════════════════════════════════════════
+
+                              V1          V2          V3          V4
+────────────────────────────────────────────────────────────────────
+DIAGNOSIS
+  Hit rate                 15/32 (47%)  19/32 (59%)  16/32 (50%)  20/32 (62%)
+  RCA score (1-5)           1.88        1.84        2.00        2.12
+  Evidence (1-5)            2.47        4.38        4.16        4.69
+  Reasoning (1-5)           3.06        3.97        4.06        4.09
+
+BY DIFFICULTY
+  Easy  hit rate            6/9         8/9         8/9         9/9
+  Medium hit rate           7/15       10/15        5/15        6/15
+  Hard  hit rate            2/8         1/8         3/8         5/8
+
+BY ROOT CAUSE
+  payment                   7/8         7/8         4/8         6/8
+  product-catalog           3/8         2/8         4/8         5/8
+  kafka                     1/8         2/8         2/8         5/8
+  ad                        4/8         8/8         6/8         4/8
+
+INVESTIGATION
+  Avg tool calls           17.8        13.8        14.9        12.9
+  Avg signals checked       2.0         2.4         2.2         2.8
+  All 3 signals            11/32       17/32       11/32       26/32
+
+TOKENS & LATENCY
+  Avg tokens              40,739      33,134      32,859      28,298
+  Avg latency             224s        185s        184s        147s
+────────────────────────────────────────────────────────────────────
+
+DELTAS (single-turn):
+  V1→V2: hit +12%, evidence +1.91, tool calls -22%, tokens -19%
+         latency -17%, all 3 signals 34%→53%, ad 4/8→8/8
+  V2→V3: hit -9% (noise), evidence -0.22 (noise), ~same on tokens/latency
+         V3 single-turn ≈ V2 (compaction minimal on short investigations)
+  V3→V4: hit +12%, evidence +0.53, tool calls -13%, tokens -14%
+         latency -20%, all 3 signals 34%→81%
+         kafka 2/8→5/8, catalog 4/8→5/8, hard 3/8→5/8
+  V1→V4: hit +15%, evidence +2.22, tool calls -28%, tokens -31%
+         latency -34%, all 3 signals 34%→81%
+
+════════════════════════════════════════════════════════════════
+  MULTI-TURN (n=8, 2-3 turns each, 17 scored turns)
+  Results from latest V4 run with accurate per-model pricing
+════════════════════════════════════════════════════════════════
+
+                              V1          V2          V3          V4
+────────────────────────────────────────────────────────────────────
+DIAGNOSIS
+  Hit rate                 10/17 (59%)  9/17 (53%) 13/17 (76%) 14/17 (82%)
+  RCA score (1-5)           2.71        1.94        3.24        3.12
+  Evidence (1-5)            2.65        3.00        3.88        4.35
+  Reasoning (1-5)           3.76        3.82        4.47        4.59
+
+CONTEXT GROWTH (avg tokens)
+  Turn 1                   7,753       6,873       7,800       5,821
+  Turn 2                  10,954       9,872       9,411       8,212
+  Turn 3                  12,547      12,330      12,559       9,056
+
+AGGREGATE
+  Avg final tokens         11,955      10,761      10,986       8,646
+  Avg tool calls            28.6        22.6        30.5        25.0
+  Cache hits                   0           0           3           2
+  Compacted                    0           0         128         127
+  Avg latency              517s        401s        569s        454s
+────────────────────────────────────────────────────────────────────
+
+DELTAS (multi-turn):
+  V1→V2: tool calls -21%, latency -22%
+  V2→V3: hit +23%, evidence +0.88, reasoning +0.65
+         compaction working (128 cleared), context flat on turn 2
+  V3→V4: hit +6% (76%→82%), evidence +0.47, tokens -21%
+         final tokens 11.0K→8.6K, latency -20%
+  V1→V4: hit +23% (59%→82%), evidence +1.70, reasoning +0.83
+         final tokens -28%, tool calls -13%
+
+════════════════════════════════════════════════════════════════
+  VERSION STORY
+════════════════════════════════════════════════════════════════
+
+V1 → V2 (Prompt Engineering + Tool Improvements):
+  Biggest quality lever. Methodology prompt, structured output,
+  error enrichment, parallel tools, topology injection.
+  Evidence nearly doubles (2.47→4.38). Ad service: 4/8→8/8.
+  Tokens -19%, latency -17% from fewer wandering queries.
+
+V2 → V3 (Context Management):
+  Single-turn: ~same as V2 (compaction doesn't fire on short runs).
+  Multi-turn: hit +23% (53%→76%). Compaction clears stale tool
+  results, reducing noise — model reasons better with less context.
+  128 tool results compacted.
+
+V3 → V4 (Model Routing):
+  gpt-4.1 for first sweep call, gpt-5.4 for all reasoning.
+  Single-turn: hit +12%, tokens -14%, latency -20%.
+  Hard difficulty: 3/8→5/8. Kafka: 2/8→5/8.
+  All 3 signals: 34%→81% — the cheap model follows the parallel
+  sweep methodology well, ensuring broader signal coverage.
+  Multi-turn: hit +6% (76%→82%), tokens -21%.
+
+V4 is the best version on both benchmarks:
+  Single: 62% hit, 28.3K tokens, 147s latency
+  Multi:  82% hit, 8.6K final tokens, 4.35 evidence
+
+════════════════════════════════════════════════════════════════
+  KEY INSIGHTS
+════════════════════════════════════════════════════════════════
+
+1. Kafka is the hardest failure type (V1: 1/8, V4: 5/8).
+   Async pipeline — agent must look beyond the request path.
+
+2. V4's gpt-4.1 sweep produces better signal coverage (81% all-3)
+   than V3's gpt-5.4 sweep (34% all-3). Simpler model follows
+   the methodology prompt more faithfully on formulaic tasks.
+
+3. Hard difficulty improved most across versions (V1: 2/8, V4: 5/8).
+   Prompt methodology + context management compound on vague symptoms.
+
+4. Evidence quality is the most stable metric across runs.
+   RCA and hit rate have n=1 judge variance.
+
+5. Multi-turn latency is noisy (rate limit dominated). Single-turn
+   latency (224s→147s, -34%) is the reliable speed signal.
+
+6. Token reduction (40.7K→28.3K, -31%) comes from three layers:
+   V2 prompt (converge faster), V3 compaction (clear stale data),
+   V4 routing (cheaper model = leaner sweep output).
+
+════════════════════════════════════════════════════════════════
+  WHY gpt-4.1 OUTPERFORMS gpt-5.4 ON THE FIRST SWEEP
+════════════════════════════════════════════════════════════════
+
+Root cause: an interaction between model behavior and incomplete
+signal discovery in the topology injection.
+
+WHAT HAPPENS
+  Before the first LLM call, agent.py injects a service topology
+  via list_services. This tool queries label/tag discovery APIs from
+  Mimir, Tempo, and Loki to report which signals each service has.
+  However, only Mimir's API returns data. Loki and Tempo's discovery
+  APIs return empty responses in the grafana/otel-lgtm all-in-one
+  image — the labels API returns {"status":"success"} with no data
+  payload, despite data being fully queryable via LogQL/TraceQL.
+
+  Result: topology shows every service as "metrics" only.
+  The data exists in all three backends, but discovery can't see it.
+
+HOW THE MODELS DIVERGE
+  gpt-5.4 reads the topology, reasons about it, and decides:
+    "topology shows only metrics-enabled services, so querying
+    logs and traces would be wasteful — I'll focus on metrics."
+  18/32 V3 scenarios explicitly state this reasoning.
+  It mentions all 3 signals in 22/32 openings but actually
+  checks all 3 in only 11/32 — low follow-through.
+
+  gpt-4.1 reads the same topology but follows the prompt's
+  Step 2 literally: "query metrics, logs, and traces simultaneously."
+  It doesn't try to optimize based on topology.
+  It checks all 3 signals in 26/32 scenarios — high follow-through.
+
+BY THE NUMBERS
+                                    V3 (gpt-5.4)    V4 (gpt-4.1)
+  ──────────────────────────────────────────────────────────────
+  All 3 signals checked              11/32 (34%)     26/32 (81%)
+  Hit rate                           16/32 (50%)     20/32 (62%)
+  Evidence quality                   4.16            4.69
+  "Topology only metrics" reasoning  18/32 (56%)      0/32 (0%)
+  Avg tool calls                     14.9            12.9
+  Avg tokens                         32,859          28,298
+
+SCENARIO-LEVEL ANALYSIS
+  V3 miss → V4 hit (improvements):  9 scenarios
+  V3 hit → V4 miss (regressions):   5 scenarios
+  Net improvement:                  +4 hits
+
+  Biggest gains: kafka 2/8→5/8, hard difficulty 3/8→5/8
+  V4 improvements correlate with better signal coverage —
+  8 of 9 flipped scenarios had all-3-signals in V4 vs not in V3.
+
+SIGNAL DISCOVERY GAP
+  list_services relies on label/tag discovery APIs to determine
+  signal availability. In the grafana/otel-lgtm:0.8.1 image,
+  Loki and Tempo's discovery APIs return empty despite service_name
+  being correctly configured as an indexed label. Only Mimir's
+  Prometheus-compatible API works reliably. The tool silently
+  treats missing data as "no services" — no warning logged.
+
+  Fix options (not implemented — documented as future work):
+  a) Infra: investigate otel-lgtm image labels API behavior
+  b) Code: probe backends with limit=1 test queries instead of
+     relying on discovery APIs
+
+GENERAL PRINCIPLE
+  In agentic systems, match model capability to subtask type:
+  - Execution tasks (structured, formulaic): use a model with
+    high instruction-following fidelity (gpt-4.1). The prompt
+    already encodes the right strategy — don't second-guess it.
+  - Reasoning tasks (correlation, diagnosis): use a model with
+    deep reasoning capability (gpt-5.4). Autonomous planning
+    is an asset when the task requires judgment.
+  gpt-5.4's "intelligence" becomes a liability on the sweep
+  because it second-guesses correct methodology based on
+  incomplete context. gpt-4.1 treats the prompt as a contract.

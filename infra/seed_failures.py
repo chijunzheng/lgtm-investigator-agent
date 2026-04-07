@@ -1,11 +1,24 @@
-"""Toggle OTel demo feature flags to generate failure telemetry.
+"""Step 1 of the data pipeline: generate real failure telemetry.
 
-Runs two rounds:
-  Round 1 -> dev set time windows
-  Round 2 -> held-out set time windows
+Toggles feature flags in the OTel demo's flagd config to create known failures
+with recorded time windows. The OTel demo is a 28-microservice e-commerce app
+that generates realistic distributed traces, logs, and metrics.
 
-Same flags in both rounds. Different timestamps = different data.
-Modifies the flagd config file directly (flagd watches and auto-reloads).
+Pipeline: seed_failures.py → curate_benchmarks.py
+
+How it works:
+  1. For each failure type (payment, catalog, kafka, ad):
+     a. Enable the feature flag → failure starts
+     b. Wait N seconds (telemetry accumulates in Loki/Mimir/Tempo)
+     c. Disable the flag → failure stops
+     d. Record the time window
+  2. Run two rounds with identical flags but different timestamps:
+     - Round 1: "dev" set (for prompt iteration)
+     - Round 2: "holdout" set (for final evaluation)
+  3. Save all timestamps to seed_timestamps.json
+
+The flagd config file is modified directly — flagd watches it and auto-reloads
+within ~1 second, so no restart is needed.
 
 Usage:
   python3 infra/seed_failures.py
@@ -265,7 +278,7 @@ def main() -> None:
         f.write("\n")
 
     print(f"\nDone. Timestamps saved to {args.output}")
-    print(f"Next: python3 infra/build_benchmarks.py")
+    print(f"Next: python3 infra/curate_benchmarks.py")
 
 
 if __name__ == "__main__":
