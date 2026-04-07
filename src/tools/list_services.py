@@ -1,8 +1,20 @@
+"""List all services in the system with their available signal types.
+
+This tool takes no parameters — it aggregates service names from Tempo (traces)
+and Mimir (metrics) to build a system topology map. The agent uses this to
+understand what services exist before starting an investigation.
+
+In V2+, this is called automatically before the first LLM turn (inject_topology)
+so the model already knows the system layout. It can also be called explicitly
+by the LLM via the tool interface.
+"""
+
 import requests
-from config import TEMPO_URL, MIMIR_URL
+from config import LOKI_URL, TEMPO_URL, MIMIR_URL
 
 TOOL_NAME = "list_services"
 
+# OpenAI function schema. Note: no parameters — this is a "discovery" tool.
 DEFINITION = {
     "type": "function",
     "function": {
@@ -21,7 +33,28 @@ DEFINITION = {
 
 def execute(*, metadata_headers: bool = False, error_enrichment: bool = False,
             **_kwargs) -> str:
+    """Aggregate service names from Tempo, Mimir, and Loki, showing which signals are available.
+
+    Queries 3 backends independently and merges results. If one backend is
+    down, the other's results are still returned (graceful degradation).
+
+    Output example:
+      payment: metrics, traces
+      frontend: metrics, traces
+      kafka: metrics
+    """
     services = {}
+
+    try:
+        r = requests.get(
+            f"{LOKI_URL}/loki/api/v1/label/service_name/values",
+            timeout=15,
+        )
+        r.raise_for_status()
+        for name in r.json().get("data", []):
+            services.setdefault(name, set()).add("logs")
+    except Exception as e:
+        services["_error_loki"] = {f"loki error: {e}"}
 
     try:
         r = requests.get(

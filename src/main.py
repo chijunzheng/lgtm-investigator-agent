@@ -1,3 +1,15 @@
+"""CLI entry point for the Investigate tool.
+
+Two modes:
+  python3 src/main.py --version v4          → interactive REPL (terminal)
+  python3 src/main.py --version v4 --web    → FastAPI server (Grafana plugin)
+
+The REPL supports:
+  - Free-form incident descriptions ("Checkout is failing")
+  - Demo scenarios with pre-loaded time windows ("demo payment-failure")
+  - Stats, reset, and help commands
+"""
+
 import argparse
 import os
 import sys
@@ -15,6 +27,15 @@ from agent import Agent
 from prompts.system_v1 import SYSTEM_V1
 from prompts.system_v2 import SYSTEM_V2
 
+# ---------------------------------------------------------------------------
+# Version configs: each version enables a different set of agent features.
+# Same agent.py code, different feature flags → different behavior.
+#
+# V1: Baseline — minimal prompt, sequential tools, no enrichment
+# V2: Enhanced prompt + parallel tools + metadata headers + error enrichment + topology
+# V3: V2 + context management (micro-compact clears old tool results)
+# V4: V3 + model routing (cheap model for first sweep call)
+# ---------------------------------------------------------------------------
 VERSION_CONFIGS = {
     "v1": {
         "system_prompt": SYSTEM_V1,
@@ -42,13 +63,29 @@ VERSION_CONFIGS = {
         "error_enrichment": True,
         "parallel_tool_calls": True,
         "inject_topology": True,
+        "model_routing": False,
+    },
+    "v4": {
+        "system_prompt": SYSTEM_V2,
+        "tools_enabled": True,
+        "context_management_enabled": True,
+        "tool_metadata_headers": True,
+        "error_enrichment": True,
+        "parallel_tool_calls": True,
+        "inject_topology": True,
+        "model_routing": True,
     },
 }
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 def _load_demo_scenarios():
-    """Load demo scenarios from seed_timestamps.json if available, else use defaults."""
+    """Load pre-configured demo scenarios from infra/seed_timestamps.json.
+
+    Each demo has a failure symptom and a time window scoped to when the
+    failure was active (created by infra/seed_failures.py). This lets users
+    quickly test the agent against known failures without typing timestamps.
+    """
     ts_path = PROJECT_ROOT / "infra" / "seed_timestamps.json"
     if not ts_path.exists():
         return []
@@ -80,6 +117,7 @@ DEMO_SCENARIOS = _load_demo_scenarios()
 
 
 def check_health(name: str, url: str, path: str = "/ready") -> bool:
+    """Verify an observability backend is reachable before starting the REPL."""
     try:
         r = requests.get(f"{url}{path}", timeout=5)
         if r.status_code < 400:
@@ -115,9 +153,21 @@ def print_demos():
 
 
 def main():
+    """Parse CLI args, check backends, create agent, and start the REPL loop."""
     parser = argparse.ArgumentParser(description="Investigate CLI", add_help=False)
-    parser.add_argument("--version", choices=["v1", "v2", "v3"], default="v1")
+    parser.add_argument("--version", choices=["v1", "v2", "v3", "v4"], default="v1")
+    parser.add_argument("--web", action="store_true", help="Start web UI server instead of CLI")
     args = parser.parse_args()
+
+    if args.web:
+        from config import WEB_HOST, WEB_PORT
+        import uvicorn
+        os.environ.setdefault("AGENT_VERSION", args.version)
+        print(f"\n  Starting web server (version {args.version.upper()})...")
+        print(f"  API: http://{WEB_HOST}:{WEB_PORT}")
+        print(f"  Open Grafana plugin at http://localhost:3001/grafana/a/investigate-investigate-app\n")
+        uvicorn.run("web.server:app", host=WEB_HOST, port=WEB_PORT, reload=False)
+        return
 
     version = args.version
     config = VERSION_CONFIGS[version]
@@ -158,6 +208,7 @@ def main():
         error_enrichment=config["error_enrichment"],
         parallel_tool_calls=config["parallel_tool_calls"],
         inject_topology=config["inject_topology"],
+        model_routing=config.get("model_routing", False),
     )
 
     readline.parse_and_bind("tab: complete")

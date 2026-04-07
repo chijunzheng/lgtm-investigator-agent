@@ -1,8 +1,21 @@
+"""Query metrics from Mimir/Prometheus using PromQL.
+
+Mimir is the Prometheus-compatible metrics backend in the LGTM stack. It stores
+time-series data: request rates, error rates, latency percentiles, CPU usage, etc.
+The LLM calls this to check quantitative signals during investigations.
+
+Two query modes:
+  - Instant: omit start/end → returns latest value (vector)
+  - Range:   provide start/end/step → returns values over time (matrix)
+"""
+
 import requests
 from config import MIMIR_URL, TOOL_OUTPUT_MAX_CHARS
 
 TOOL_NAME = "query_metrics"
 
+# OpenAI function schema. Note: start/end are optional — omitting them gives
+# an instant query (latest value), including them gives a range query (time series).
 DEFINITION = {
     "type": "function",
     "function": {
@@ -37,6 +50,12 @@ DEFINITION = {
 def execute(*, query: str, start: str = None, end: str = None, step: str = "60s",
             metadata_headers: bool = False, error_enrichment: bool = False,
             **_kwargs) -> str:
+    """Query Mimir's Prometheus-compatible API.
+
+    Instant query (/api/v1/query): returns a single value per series (vector).
+    Range query (/api/v1/query_range): returns a time series of values (matrix).
+    """
+    # Determine query type: range (start+end provided) vs instant (just query)
     is_range = start is not None and end is not None
 
     try:
@@ -65,6 +84,9 @@ def execute(*, query: str, start: str = None, end: str = None, step: str = "60s"
     result_type = data.get("data", {}).get("resultType", "")
     results = data.get("data", {}).get("result", [])
 
+    # Format results: cap at 20 series to prevent huge outputs.
+    # For range (matrix) results, show only the last 5 data points per series.
+    # For instant (vector) results, show just the current value.
     lines = []
     series_count = 0
     for series in results[:20]:
@@ -104,6 +126,13 @@ def execute(*, query: str, start: str = None, end: str = None, step: str = "60s"
 
 
 def _enrich_error(query: str, error: str) -> str:
+    """Suggest fixes when a metric query fails.
+
+    Queries Mimir's label API to find similar metric names. The OTel naming
+    hint is critical because the demo uses OTel-standard names
+    (http_server_duration_seconds_*, rpc_server_duration_milliseconds_*),
+    not custom ones — LLMs often guess wrong metric names without this hint.
+    """
     hints = []
     error_lower = error.lower()
     if "unknown metric" in error_lower or "not found" in error_lower or "no data" in error_lower:

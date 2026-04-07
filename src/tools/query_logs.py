@@ -1,8 +1,21 @@
+"""Query logs from Loki using LogQL.
+
+Loki is the log aggregation backend in the LGTM stack (Loki, Grafana, Tempo, Mimir).
+The LLM calls this tool to search for error messages, stack traces, and log patterns
+during incident investigation.
+
+Loki's API expects LogQL queries like:
+  {service_name="payment"} |= "error"    — filter by service, grep for "error"
+  {service_name=~"pay.*"} |~ "timeout"   — regex match on service, regex grep
+"""
+
 import requests
 from config import LOKI_URL, TOOL_OUTPUT_MAX_CHARS
 
 TOOL_NAME = "query_logs"
 
+# OpenAI function-calling schema: the LLM sees this description to decide
+# when and how to call the tool. Parameters define what arguments the LLM can pass.
 DEFINITION = {
     "type": "function",
     "function": {
@@ -37,6 +50,13 @@ DEFINITION = {
 def execute(*, query: str, start: str, end: str, limit: int = 100,
             metadata_headers: bool = False, error_enrichment: bool = False,
             **_kwargs) -> str:
+    """Query Loki's query_range API and return matching log lines as text.
+
+    Called by tools_registry.dispatch(). The **_kwargs catches any extra args
+    the LLM might hallucinate (prevents crashes from unexpected parameters).
+
+    Returns a plain string that gets added to the conversation as a tool message.
+    """
     try:
         r = requests.get(
             f"{LOKI_URL}/loki/api/v1/query_range",
@@ -69,6 +89,11 @@ def execute(*, query: str, start: str, end: str, limit: int = 100,
         for ts, line in stream.get("values", []):
             lines.append(f"[{service}] {line}")
 
+    # Two output modes controlled by metadata_headers flag:
+    #   Without headers (V1): raw log lines — simple but the LLM has no context
+    #     about whether results were truncated or the window was empty
+    #   With headers (V2+): prepends query echo + result count + time window,
+    #     so the LLM can reason about result completeness
     if metadata_headers:
         header = f"[{TOOL_NAME}] query={query}\n"
         if not lines:
@@ -87,6 +112,11 @@ def execute(*, query: str, start: str, end: str, limit: int = 100,
 
 
 def _enrich_error(query: str, error: str) -> str:
+    """Suggest fixes when a log query fails (V2+ error_enrichment feature).
+
+    Queries Loki's metadata APIs to find available labels and service names,
+    so the LLM can self-correct instead of getting stuck in a loop of failures.
+    """
     hints = []
     if "parse error" in error.lower() or "syntax error" in error.lower():
         hints.append("[hint] Check LogQL syntax. Example: {service_name=\"payment\"} |= \"error\"")
