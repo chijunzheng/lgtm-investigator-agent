@@ -1,4 +1,4 @@
-# Investigate CLI
+# Investigator Agent
 
 An AI-powered incident investigation agent that queries Loki (logs), Mimir (metrics), and Tempo (traces) to diagnose production issues. Built with OpenAI's function-calling API, with a Grafana plugin frontend and a comprehensive eval framework.
 
