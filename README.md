@@ -100,13 +100,13 @@ The CLI ships with pre-loaded demo scenarios scoped to known failure windows:
 
 ### Single-Turn Results (n=32, balanced split)
 
-| Metric | V1 | V2 | V4 |
-|---|---:|---:|---:|
-| Hit rate | 47% | 59% | 66% |
-| Evidence quality (1-5) | 2.53 | 4.44 | 4.31 |
-| Tool calls | 20.6 | 15.3 | 12.6 |
-| Cost per investigation | $0.111 | $0.096 | $0.095 |
-| Latency | 303s | 214s | 140s |
+| Metric | V1 | V2 | V3 | V4 |
+|---|---:|---:|---:|---:|
+| Hit rate | 47% | 59% | 50% | 62% |
+| Evidence quality (1-5) | 2.47 | 4.38 | 4.16 | 4.69 |
+| Tool calls | 17.8 | 13.8 | 14.9 | 12.9 |
+| Cost per investigation | $0.088 | $0.087 | $0.100 | $0.088 |
+| Latency | 224s | 185s | 184s | 147s |
 
 ### Multi-Turn Results (n=8 scenarios, 17 scored turns)
 
