@@ -58,7 +58,7 @@ The agent loop is the same code for all versions -- differences are controlled b
 Open the hosted instance -- no setup required:
 
 ```
-http://34.121.52.184:3000/a/investigate-investigate-app
+http://34.42.222.138:3000/a/investigate-investigate-app
 ```
 
 The Investigate plugin is in the left sidebar. Select a demo scenario or type any incident description to start an investigation.
